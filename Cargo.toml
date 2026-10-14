@@ -1,3 +1,9 @@
+[patch.crates-io]
+# Android's mouse wheel and hover (see vendor/README.md). Every shell in this repo reads a pointer's
+# wheel events to scroll; winit's Android backend drops those MotionActions, so without this an
+# Android build cannot be scrolled by a mouse or a trackpad.
+winit = { path = "vendor/winit" }
+
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*", "xtask"]
@@ -91,7 +97,16 @@ opt-level = 2
 opt-level = 1
 
 [profile.release]
+strip = true
 opt-level = 3
 lto = "thin"
 codegen-units = 16
 debug = 0
+
+# Android release: size-optimized (APK download size matters on phones/tablets).
+[profile.android]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+strip = true

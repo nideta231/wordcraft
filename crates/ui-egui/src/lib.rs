@@ -152,6 +152,10 @@ pub struct Services {
     /// `xdg-mime`. `None` (web, macOS) hides the button; macOS shows how to do it in Finder
     /// instead. An error means nothing changed.
     pub make_default_app: Option<Box<dyn Fn() -> Result<DefaultApp, String>>>,
+    /// Host: open a second window on this app, as Window ▸ New Window asks for. Android answers
+    /// with a second Activity, so two documents can be put side by side. Unset (the desktop, the
+    /// web, and any host that has no way to) leaves `view.newWindow` showing its dialog.
+    pub new_window: Option<Box<dyn Fn()>>,
 }
 
 /// What [`Services::make_default_app`] did.
@@ -954,6 +958,10 @@ impl WordApp {
                     }
                 }
                 "pasteSpecial" => self.dialog = Some(dialogs::Dialog::paste_special(self, req)),
+                "newWindow" => match &self.services.new_window {
+                    Some(open) => open(),
+                    None => self.dialog = dialogs::Dialog::open(what, self),
+                },
                 other => self.dialog = dialogs::Dialog::open(other, self),
             }
         }
