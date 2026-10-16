@@ -72,6 +72,13 @@ mod file_picker;
 mod modifiers;
 mod prefs_watch;
 mod touch_scroll;
+mod update_check;
+
+/// This build as the release tags write it (`v<this>`): the upstream version plus the port's
+/// revision. Bump `-android.N` together with the tag; CI refuses a tag that does not match.
+pub const PORT_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "-android.2");
+/// The fork whose releases the update check reads.
+const UPDATE_REPO: &str = "nideta231/wordcraft";
 
 /// The app's private data directory, captured in `android_main` before any service closure
 /// runs: `<internal storage>/Android/data/com.nideta231.wordcraft/files`.
@@ -327,6 +334,7 @@ pub fn android_main(app: winit::platform::android::activity::AndroidApp) {
     let _ = std::fs::create_dir_all(&data_dir);
     let _ = DATA_DIR.set(data_dir.clone());
     init_logging(&data_dir);
+    update_check::set_app(&app);
     log::info!("WordCraft {} starting on Android; data dir {}", env!("CARGO_PKG_VERSION"), data_dir.display());
     // The app's external files directory: always readable and writable with no permission, so
     // the picker offers it as a root and Save falls back to it (see `file_picker`).
@@ -366,6 +374,7 @@ pub fn android_main(app: winit::platform::android::activity::AndroidApp) {
                 inner: app,
                 modifiers: modifiers::Tracked::default(),
                 touch: touch_scroll::TouchScroll::default(),
+                updater: update_check::Updater::new(UPDATE_REPO, "WordCraft", PORT_VERSION.to_string(), DATA_DIR.get().map_or(Path::new("."), |d| d.as_path())),
                 prefs: prefs_watch::Writer::new(prefs_file(), PREFS_EVERY),
             }))
         }),
@@ -394,6 +403,8 @@ struct Shell {
     modifiers: modifiers::Tracked,
     /// Two-finger scrolling, translated from touches into wheel events (see [`touch_scroll`]).
     touch: touch_scroll::TouchScroll,
+    /// The GitHub release check and the "new version" banner (see [`update_check`]).
+    updater: update_check::Updater,
     /// The preferences, written as the app runs rather than only on the way out: Android never
     /// gives that ending, so a swipe from Recents would otherwise take every preference with it
     /// (see [`prefs_watch`]).
@@ -439,6 +450,8 @@ impl Shell {
 
 impl eframe::App for Shell {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.updater.poll();
+        self.updater.check_if_due(ctx);
         self.inner.logic(ctx);
         if self.prefs.due() {
             let bytes = prefs_bytes(&self.inner);
@@ -462,6 +475,10 @@ impl eframe::App for Shell {
         self.inner.ui(ui);
         // After the app, so the picker floats above the ribbon and the page.
         file_picker::draw(ui.ctx());
+        self.updater.banner(ui.ctx());
+        if let Some(wait) = self.touch.repaint_after() {
+            ui.ctx().request_repaint_after(wait);
+        }
         // File ▸ Exit is a menu click, so it is set during this call: check here, in the same
         // frame, rather than leaving it to the next `logic` — no repaint is guaranteed after a
         // click, and waiting for one is how Exit ends up doing nothing.

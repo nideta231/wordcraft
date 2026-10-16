@@ -96,6 +96,10 @@ version = 1
 # MANAGE_EXTERNAL_STORAGE ("All files access") cannot be requested at runtime: it is granted by
 # hand in Settings ▸ Apps ▸ WordCraft ▸ Special access. Google Play restricts it to
 # file-manager-class apps, which does not apply to a sideloaded build.
+# The update check asks api.github.com for the latest release (src/update_check.rs).
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"
+
 [[package.metadata.android.uses_permission]]
 name = "android.permission.MANAGE_EXTERNAL_STORAGE"
 
